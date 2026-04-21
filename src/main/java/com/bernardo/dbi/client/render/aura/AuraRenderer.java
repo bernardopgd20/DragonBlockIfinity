@@ -1,18 +1,21 @@
-package com.bernardo.dbi.client.render;
+package com.bernardo.dbi.client.render.aura;
 
 import com.bernardo.dbi.DragonBlockInfinity;
+import com.bernardo.dbi.client.TempAuraColor;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.*;
-import net.minecraft.client.Camera;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
-import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.client.event.RenderPlayerEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 import org.joml.Matrix4f;
+import org.joml.Quaternionf;
 
-@OnlyIn(Dist.CLIENT)
+@Mod.EventBusSubscriber(modid = DragonBlockInfinity.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public class AuraRenderer {
 
     private static final ResourceLocation AURA_TEX =
@@ -22,32 +25,33 @@ public class AuraRenderer {
     private static boolean growing = true;
 
     public static void tick() {
-        if (growing) {
-            pulse += 0.04f;
-            if (pulse >= 1f) growing = false;
-        } else {
-            pulse -= 0.04f;
-            if (pulse <= 0.3f) growing = true;
-        }
+        if (!AuraSettings.enabled) return;
+        float spd = 0.02f * (AuraSettings.speed / 5.5f);
+        if (growing) { pulse += spd; if (pulse >= 1f) growing = false; }
+        else         { pulse -= spd; if (pulse <= 0.3f) growing = true; }
     }
 
-    // color = {r, g, b} valores de 0.0 a 1.0
-    public static void render(Player player, float partialTick,
-                              PoseStack poseStack,
-                              MultiBufferSource bufferSource,
-                              Camera camera,
-                              float[] color) {
+    @SubscribeEvent
+    public static void onRenderPlayer(RenderPlayerEvent.Post event) {
+        if (!AuraSettings.enabled) return;
+        if (!AuraManager.isAuraActive(event.getEntity().getUUID())) return;
 
-        double dx = player.xo + (player.getX() - player.xo) * partialTick - camera.getPosition().x;
-        double dy = player.yo + (player.getY() - player.yo) * partialTick - camera.getPosition().y;
-        double dz = player.zo + (player.getZ() - player.zo) * partialTick - camera.getPosition().z;
+        Player player = event.getEntity();
+        Minecraft mc = Minecraft.getInstance();
+        boolean firstPerson = mc.options.getCameraType().isFirstPerson() && player == mc.player;
+        float alpha = firstPerson ? 0.55f : 0.70f;
+        float[] color = TempAuraColor.COLOR;
 
+        tick();
+
+        PoseStack poseStack = event.getPoseStack();
         poseStack.pushPose();
-        poseStack.translate(dx, dy + player.getBbHeight() / 2.0, dz);
-        poseStack.mulPose(camera.rotation());
+        poseStack.translate(0, player.getBbHeight() / 2.0, 0);
 
-        float size = 1.2f;
-        float alpha = 0.4f + pulse * 0.4f;
+        Quaternionf camRot = mc.getEntityRenderDispatcher().cameraOrientation();
+        poseStack.mulPose(camRot);
+
+        float size = (1.0f + pulse * 0.05f) * AuraSettings.amplitude;
 
         RenderSystem.setShader(GameRenderer::getPositionTexShader);
         RenderSystem.setShaderTexture(0, AURA_TEX);
@@ -55,17 +59,15 @@ public class AuraRenderer {
         RenderSystem.defaultBlendFunc();
         RenderSystem.disableCull();
         RenderSystem.depthMask(false);
-        RenderSystem.setShaderColor(color[0], color[1], color[2], alpha);
+        RenderSystem.setShaderColor(color[0], color[1], color[2], alpha * AuraSettings.alp2);
 
         BufferBuilder buf = Tesselator.getInstance().getBuilder();
         buf.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
-
         Matrix4f mat = poseStack.last().pose();
         buf.vertex(mat, -size, -size, 0).uv(0, 1).endVertex();
         buf.vertex(mat,  size, -size, 0).uv(1, 1).endVertex();
         buf.vertex(mat,  size,  size, 0).uv(1, 0).endVertex();
         buf.vertex(mat, -size,  size, 0).uv(0, 0).endVertex();
-
         Tesselator.getInstance().end();
 
         RenderSystem.setShaderColor(1f, 1f, 1f, 1f);

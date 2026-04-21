@@ -1,5 +1,7 @@
 package com.bernardo.dbi;
 
+import com.bernardo.dbi.block.DBIBlocks;
+import com.bernardo.dbi.item.DBIItems;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -14,12 +16,16 @@ public class DragonBlockInfinity {
     public static final Logger LOGGER = LogManager.getLogger();
 
     public DragonBlockInfinity() {
-        IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
-        modEventBus.addListener(this::setup);
-        LOGGER.info("Dragon Block Infinity iniciado!");
+        IEventBus bus = FMLJavaModLoadingContext.get().getModEventBus();
+
+        DBIBlocks.register(bus);
+        DBIItems.register(bus);
+        DBICreativeTab.register(bus);
+
+        bus.addListener(this::setup);
     }
 
     private void setup(final FMLCommonSetupEvent event) {
-        LOGGER.info("DBI setup completo!");
+        LOGGER.info("DBI Common setup completo!");
     }
 }
