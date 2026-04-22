@@ -28,10 +28,7 @@ public class ClientEvents {
             MenuRouter.open("character_creation");
         }
 
-        if (KeyBindings.AURA_KEY.isDown()) {
-            AuraManager.showAura(player.getUUID());
-        } else {
-            AuraManager.hideAura(player.getUUID());
-        }
+        // TESTE: aura sempre ativa
+        AuraManager.showAura(player.getUUID());
     }
 }

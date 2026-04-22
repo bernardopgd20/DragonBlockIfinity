@@ -26,6 +26,7 @@ find src/ -name "*.json" -exec sh -c 'echo "=== $1 ===" >> projeto.txt; cat "$1"
 
 # Listar caminhos dos arquivos .png do src/
 echo "=== Caminhos dos arquivos .png ===" >> projeto.txt
-find src/ -name "*.png" >> projeto.txt
+find src/ -name "*.png" >> projeto.txt \;
+find src/main/resources/assets/dragonblockinfinity/shaders -type f -exec echo "=== {} ===" \; -exec cat {} 
 
 echo "Arquivo projeto.txt criado com o código coletado."

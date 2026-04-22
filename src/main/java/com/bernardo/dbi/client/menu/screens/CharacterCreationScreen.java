@@ -28,14 +28,14 @@ public class CharacterCreationScreen extends DBIScreen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         renderBackground(graphics);
 
-        // Renderiza só a área útil da PNG (256x159 de 256x256)
         graphics.blit(GUI_TEX,
             guiLeft, guiTop, guiWidth, guiHeight,
             0, 0, IMG_W, USEFUL_H, IMG_W, IMG_H);
 
+        // Player na metade esquerda, pés no fundo da área útil
         int previewX = guiLeft + guiWidth / 4;
-        int previewY = guiTop  + guiHeight / 2;
-        int previewSize = guiWidth / 6;
+        int previewY = guiTop  + guiHeight - scaled(10);
+        int previewSize = guiHeight / 3;
 
         PlayerPreview.render(graphics, previewX, previewY, previewSize, yaw, pitch);
 
