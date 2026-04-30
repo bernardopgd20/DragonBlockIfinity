@@ -20,9 +20,15 @@ echo "" >> projeto.txt
 echo "=== Arquivos .java ===" >> projeto.txt
 find src/ -name "*.java" -exec sh -c 'echo "=== $1 ===" >> projeto.txt; cat "$1" >> projeto.txt; echo "" >> projeto.txt' _ {} \;
 
-# Adicionar conteúdo de todos os arquivos .json do src/
+# Adicionar conteúdo .json do src/
 echo "=== Arquivos .json ===" >> projeto.txt
 find src/ -name "*.json" -exec sh -c 'echo "=== $1 ===" >> projeto.txt; cat "$1" >> projeto.txt; echo "" >> projeto.txt' _ {} \;
+
+echo "=== Arquivos .vsh ===" >> projeto.txt
+find src/ -name "*.vsh" -exec sh -c 'echo "=== $1 ===" >> projeto.txt; cat "$1" >> projeto.txt; echo "" >> projeto.txt' _ {} \;
+
+echo "=== Arquivos .fsh ===" >> projeto.txt
+find src/ -name "*.fsh" -exec sh -c 'echo "=== $1 ===" >> projeto.txt; cat "$1" >> projeto.txt; echo "" >> projeto.txt' _ {} \;
 
 # Listar caminhos dos arquivos .png do src/
 echo "=== Caminhos dos arquivos .png ===" >> projeto.txt

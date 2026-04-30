@@ -1,7 +1,7 @@
 #version 110
 
 
-vector4 color;
+vec4 color;
 varying vec3 vNormalWorld;
 varying vec3 v_viewDir;
 varying float vHeight;

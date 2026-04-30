@@ -273,6 +273,209 @@ repositories {
 }
 
 === Arquivos .java ===
+=== src/main/java/com/bernardo/dbi/stats/StatsManager.java ===
+package com.bernardo.dbi.stats;
+
+public class StatsManager {
+
+    private Str str;
+    private Con con;
+    private Dex dex;
+    private Spi spi;
+    private Will will;
+    private Mnd mnd;
+
+    public StatsManager(int strength, int constitution, int dexterity, int spirit, int willpower, int mind) {
+        this.str = new Str(strength);
+        this.con = new Con(constitution);
+        this.dex = new Dex(dexterity);
+        this.spi = new Spi(spirit);
+        this.will = new Will(willpower);
+        this.mnd = new Mnd(mind);
+    }
+
+    // ===== GETTERS =====
+    public Str getStr() { return str; }
+    public Con getCon() { return con; }
+    public Dex getDex() { return dex; }
+    public Spi getSpi() { return spi; }
+    public Will getWill() { return will; }
+    public Mnd getMnd() { return mnd; }
+
+    // ===== TICK =====
+    public void tick() {
+        con.tickRegeneration();
+
+        // regen KI melhorada pelo MND
+        int regen = (int)(spi.getMaxKi() * spi.getKiRegenRate());
+        regen = mnd.boostRegen(regen);
+        spi.restoreKi(regen);
+    }
+
+    // ===== DANO =====
+    public void dealDamage(int baseDamage) {
+        if (baseDamage <= 0) return;
+
+        // esquiva (DEX)
+        if (dex.tryDodge()) return;
+
+        int damage = baseDamage + str.getAttackPower();
+
+        // redução de dano (DEX)
+        damage = dex.reduceDamage(damage);
+
+        // resistência sob pressão (WILL)
+        double hpPercent = con.getHealthPercentage();
+        damage = will.boostUnderPressure(damage, hpPercent);
+
+        con.takeDamage(damage);
+    }
+
+    // ===== ATAQUE =====
+    public boolean canAttack(int cost) {
+        return str.getCurrentAttackPower() >= cost;
+    }
+
+    public void useAttack(int cost) {
+        if (!canAttack(cost)) return;
+        str.useAttack(cost);
+    }
+
+    // ===== STAMINA =====
+    public boolean canUseStamina(int cost) {
+        return con.getCurrentStamina() >= cost;
+    }
+
+    public void useStamina(int cost) {
+        if (!canUseStamina(cost)) return;
+        con.consumeStamina(cost);
+    }
+
+    // ===== KI =====
+    public boolean canUseKi(int cost) {
+        int finalCost = will.reduceKiCost(cost);
+        finalCost = mnd.reduceWaste(finalCost);
+        return spi.hasKi(finalCost);
+    }
+
+    public void useKi(int cost) {
+        int finalCost = will.reduceKiCost(cost);
+        finalCost = mnd.reduceWaste(finalCost);
+
+        if (spi.hasKi(finalCost)) {
+            spi.useKi(finalCost);
+        }
+    }
+
+    // ===== CURA =====
+    public void heal(int amount) {
+        con.heal(amount);
+    }
+
+    // ===== STATUS =====
+    public boolean isDead() {
+        return con.getCurrentHealth() <= 0;
+    }
+
+    // ===== DEBUG =====
+    @Override
+    public String toString() {
+        return "StatsManager{" +
+                "\\n  " + str.toString() +
+                "\\n  " + con.toString() +
+                "\\n  " + dex.toString() +
+                "\\n  " + spi.toString() +
+                "\\n  " + will.toString() +
+                "\\n  " + mnd.toString() +
+                "\\n}";
+    }
+}
+
+=== src/main/java/com/bernardo/dbi/stats/Str.java ===
+package com.bernardo.dbi.stats;
+public class Str {
+    private int value;
+    public Str(int value) { this.value = value; }
+    public int getValue() { return value; }
+    public int getAttackPower() { return value * 2; }
+    public int getCurrentAttackPower() { return value * 2; }
+    public void useAttack(int cost) { value = Math.max(0, value - cost); }
+    @Override public String toString() { return "Str=" + value; }
+}
+
+=== src/main/java/com/bernardo/dbi/stats/Spi.java ===
+package com.bernardo.dbi.stats;
+public class Spi {
+    private int value;
+    private int currentKi;
+    public Spi(int value) { this.value = value; this.currentKi = value * 10; }
+    public int getValue() { return value; }
+    public int getMaxKi() { return value * 10; }
+    public int getCurrentKi() { return currentKi; }
+    public float getKiRegenRate() { return value * 0.01f; }
+    public boolean hasKi(int amount) { return currentKi >= amount; }
+    public void useKi(int amount) { currentKi = Math.max(0, currentKi - amount); }
+    public void restoreKi(int amount) { currentKi = Math.min(value * 10, currentKi + amount); }
+    @Override public String toString() { return "Spi=" + value; }
+}
+
+=== src/main/java/com/bernardo/dbi/stats/Con.java ===
+package com.bernardo.dbi.stats;
+public class Con {
+    private int value;
+    private int currentHealth;
+    private int stamina;
+    public Con(int value) { this.value = value; this.currentHealth = value * 10; this.stamina = value * 5; }
+    public int getValue() { return value; }
+    public int getCurrentHealth() { return currentHealth; }
+    public double getHealthPercentage() { return (double) currentHealth / (value * 10); }
+    public void takeDamage(int dmg) { currentHealth = Math.max(0, currentHealth - dmg); }
+    public void heal(int amount) { currentHealth = Math.min(value * 10, currentHealth + amount); }
+    public int getCurrentStamina() { return stamina; }
+    public void consumeStamina(int cost) { stamina = Math.max(0, stamina - cost); }
+    public void tickRegeneration() { stamina = Math.min(value * 5, stamina + 1); }
+    public int reduceDamage(int damage) { return Math.max(0, damage - value / 2); }
+    @Override public String toString() { return "Con=" + value; }
+}
+
+=== src/main/java/com/bernardo/dbi/stats/Mnd.java ===
+package com.bernardo.dbi.stats;
+public class Mnd {
+    private int value;
+    public Mnd(int value) { this.value = value; }
+    public int getValue() { return value; }
+    public int boostRegen(int regen) { return (int)(regen * (1.0 + value * 0.005)); }
+    public int reduceWaste(int cost) { return Math.max(1, cost - value / 20); }
+    @Override public String toString() { return "Mnd=" + value; }
+}
+
+=== src/main/java/com/bernardo/dbi/stats/Will.java ===
+package com.bernardo.dbi.stats;
+public class Will {
+    private int value;
+    public Will(int value) { this.value = value; }
+    public int getValue() { return value; }
+    public int reduceKiCost(int cost) { return Math.max(1, cost - value / 10); }
+    public int boostUnderPressure(int damage, double hpPercent) {
+        if (hpPercent < 0.3) return (int)(damage * (1.0 + value * 0.01));
+        return damage;
+    }
+    @Override public String toString() { return "Will=" + value; }
+}
+
+=== src/main/java/com/bernardo/dbi/stats/Dex.java ===
+package com.bernardo.dbi.stats;
+import java.util.Random;
+public class Dex {
+    private int value;
+    private static final Random RNG = new Random();
+    public Dex(int value) { this.value = value; }
+    public int getValue() { return value; }
+    public boolean tryDodge() { return RNG.nextInt(100) < value / 2; }
+    public int reduceDamage(int damage) { return Math.max(0, damage - value / 3); }
+    @Override public String toString() { return "Dex=" + value; }
+}
+
 === src/main/java/com/bernardo/dbi/item/DBIItems.java ===
 package com.bernardo.dbi.item;
 
@@ -395,6 +598,8 @@ public abstract class SafeZone {
 === src/main/java/com/bernardo/dbi/core/PlayerPreview.java ===
 package com.bernardo.dbi.core;
 
+import com.bernardo.dbi.core.race.PlayerRaceData;
+import com.bernardo.dbi.core.race.Race;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
@@ -405,53 +610,91 @@ import org.joml.Quaternionf;
 
 public class PlayerPreview {
 
-    public static void render(GuiGraphics graphics, int x, int y, int size, float yaw, float pitch) {
+    // Textura temporária para o menu — null = usa skin normal
+    public static Race previewRace = null;
+
+    public static void render(GuiGraphics graphics, int x, int y, int size, float yaw) {
         Minecraft mc = Minecraft.getInstance();
         Player player = mc.player;
         if (player == null) return;
+
+        previewRace = PlayerRaceData.getRace(player.getUUID());
 
         PoseStack poseStack = graphics.pose();
         poseStack.pushPose();
         poseStack.translate(x, y, 50);
         poseStack.scale(size, size, -size);
+        poseStack.mulPose(new Quaternionf().rotateZ((float) Math.PI));
 
-        Quaternionf rot = new Quaternionf().rotateZ((float) Math.PI);
-        Quaternionf pitchRot = new Quaternionf().rotateX(pitch * (float)(Math.PI / 180));
-        rot.mul(pitchRot);
-        poseStack.mulPose(rot);
+        float savedYBodyRot  = player.yBodyRot;
+        float savedYRot      = player.getYRot();
+        float savedYHeadRot  = player.yHeadRot;
+        float savedYHeadRotO = player.yHeadRotO;
+        float savedXRot      = player.getXRot();
 
-        // Salva rotações originais
-        float savedYBodyRot   = player.yBodyRot;
-        float savedYRot       = player.getYRot();
-        float savedXRot       = player.getXRot();
-        float savedYHeadRotO  = player.yHeadRotO;
-        float savedYHeadRot   = player.yHeadRot;
-
-        // Força rotações do menu — cabeça igual ao corpo
         player.yBodyRot  = 180f + yaw;
         player.setYRot(180f + yaw);
-        player.setXRot(-pitch);
-        player.yHeadRot  = 180f + yaw; // cabeça segue o yaw do menu
+        player.setXRot(0f);
+        player.yHeadRot  = 180f + yaw;
         player.yHeadRotO = 180f + yaw;
 
         EntityRenderDispatcher dispatcher = mc.getEntityRenderDispatcher();
         dispatcher.setRenderShadow(false);
         RenderSystem.runAsFancy(() -> {
-            dispatcher.render(player, 0, 0, 0, 0f, 1f,
-                poseStack, graphics.bufferSource(), 0xF000F0);
+            dispatcher.render(player, 0, 0, 0, 0f, 1f, poseStack, graphics.bufferSource(), 0xF000F0);
         });
         graphics.flush();
         dispatcher.setRenderShadow(true);
 
-        // Restaura rotações originais
         player.yBodyRot  = savedYBodyRot;
         player.setYRot(savedYRot);
         player.setXRot(savedXRot);
-        player.yHeadRotO = savedYHeadRotO;
         player.yHeadRot  = savedYHeadRot;
+        player.yHeadRotO = savedYHeadRotO;
 
         poseStack.popPose();
+        previewRace = null;
     }
+}
+
+=== src/main/java/com/bernardo/dbi/core/race/PlayerRaceData.java ===
+package com.bernardo.dbi.core.race;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+
+public class PlayerRaceData {
+
+    private static final Map<UUID, Race> RACES = new HashMap<>();
+
+    public static void setRace(UUID uuid, Race race) {
+        RACES.put(uuid, race);
+    }
+
+    public static Race getRace(UUID uuid) {
+        return RACES.getOrDefault(uuid, Race.HUMAN);
+    }
+}
+
+=== src/main/java/com/bernardo/dbi/core/race/Race.java ===
+package com.bernardo.dbi.core.race;
+
+import com.bernardo.dbi.DragonBlockInfinity;
+import net.minecraft.resources.ResourceLocation;
+
+public enum Race {
+    HUMAN(null),
+    ARCOSIAN_MALE(new ResourceLocation(DragonBlockInfinity.MOD_ID, "textures/cc/male/ac1b.png"));
+
+    private final ResourceLocation texture;
+
+    Race(ResourceLocation texture) {
+        this.texture = texture;
+    }
+
+    public ResourceLocation getTexture() { return texture; }
+    public boolean hasTexture() { return texture != null; }
 }
 
 === src/main/java/com/bernardo/dbi/core/PlayerReadyState.java ===
@@ -528,666 +771,6 @@ public class DBICreativeTab {
 
     public static void register(IEventBus bus) {
         TABS.register(bus);
-    }
-}
-
-=== src/main/java/com/bernardo/dbi/status/Stamina.java ===
-package com.bernardo.dbi.status;
-
-public class Stamina {
-    private int stamina;
-
-    public Stamina() {
-        this.stamina = 0;
-    }
-
-    public int getStamina() {
-        return stamina;
-    }
-
-    public void setStamina(int value) {
-        this.stamina = Math.max(0, value);
-    }
-
-    public void addStamina(int value) {
-        this.stamina = Math.max(0, this.stamina + value);
-    }
-
-    public int getStaminaBonus() {
-        return stamina * 6;
-    }
-}
-
-=== src/main/java/com/bernardo/dbi/status/StatsManager.java ===
-package com.bernardo.dbi.status;
-
-public class StatsManager {
-
-    private Str str;
-    private Con con;
-    private Dex dex;
-    private Spi spi;
-    private Will will;
-    private Mnd mnd;
-
-    public StatsManager(int strength, int constitution, int dexterity, int spirit, int willpower, int mind) {
-        this.str = new Str(strength);
-        this.con = new Con(constitution);
-        this.dex = new Dex(dexterity);
-        this.spi = new Spi(spirit);
-        this.will = new Will(willpower);
-        this.mnd = new Mnd(mind);
-    }
-
-    // ===== GETTERS =====
-    public Str getStr() { return str; }
-    public Con getCon() { return con; }
-    public Dex getDex() { return dex; }
-    public Spi getSpi() { return spi; }
-    public Will getWill() { return will; }
-    public Mnd getMnd() { return mnd; }
-
-    // ===== TICK =====
-    public void tick() {
-        con.tickRegeneration();
-
-        // regen KI melhorada pelo MND
-        int regen = (int)(spi.getMaxKi() * spi.getKiRegenRate());
-        regen = mnd.boostRegen(regen);
-        spi.restoreKi(regen);
-    }
-
-    // ===== DANO =====
-    public void dealDamage(int baseDamage) {
-        if (baseDamage <= 0) return;
-
-        // esquiva (DEX)
-        if (dex.tryDodge()) return;
-
-        int damage = baseDamage + str.getAttackPower();
-
-        // redução de dano (DEX)
-        damage = dex.reduceDamage(damage);
-
-        // resistência sob pressão (WILL)
-        double hpPercent = con.getHealthPercentage();
-        damage = will.boostUnderPressure(damage, hpPercent);
-
-        con.takeDamage(damage);
-    }
-
-    // ===== ATAQUE =====
-    public boolean canAttack(int cost) {
-        return str.getCurrentAttackPower() >= cost;
-    }
-
-    public void useAttack(int cost) {
-        if (!canAttack(cost)) return;
-        str.useAttack(cost);
-    }
-
-    // ===== STAMINA =====
-    public boolean canUseStamina(int cost) {
-        return con.getCurrentStamina() >= cost;
-    }
-
-    public void useStamina(int cost) {
-        if (!canUseStamina(cost)) return;
-        con.consumeStamina(cost);
-    }
-
-    // ===== KI =====
-    public boolean canUseKi(int cost) {
-        int finalCost = will.reduceKiCost(cost);
-        finalCost = mnd.reduceWaste(finalCost);
-        return spi.hasKi(finalCost);
-    }
-
-    public void useKi(int cost) {
-        int finalCost = will.reduceKiCost(cost);
-        finalCost = mnd.reduceWaste(finalCost);
-
-        if (spi.hasKi(finalCost)) {
-            spi.useKi(finalCost);
-        }
-    }
-
-    // ===== CURA =====
-    public void heal(int amount) {
-        con.heal(amount);
-    }
-
-    // ===== STATUS =====
-    public boolean isDead() {
-        return con.getCurrentHealth() <= 0;
-    }
-
-    // ===== DEBUG =====
-    @Override
-    public String toString() {
-        return "StatsManager{" +
-                "\\n  " + str.toString() +
-                "\\n  " + con.toString() +
-                "\\n  " + dex.toString() +
-                "\\n  " + spi.toString() +
-                "\\n  " + will.toString() +
-                "\\n  " + mnd.toString() +
-                "\\n}";
-    }
-}
-
-=== src/main/java/com/bernardo/dbi/status/Str.java ===
-package com.bernardo.dbi.status;
-
-public class Str {
-
-    private int strength;
-    private int attackPower;
-    private int currentAttackPower;
-
-    public Str(int strength) {
-        this.strength = Math.max(1, strength);
-        recalcStats();
-        this.currentAttackPower = attackPower;
-    }
-
-    // ===== RE-CALC =====
-    private void recalcStats() {
-        this.attackPower = strength * 2;
-    }
-
-    // ===== GETTERS =====
-    public int getStrength() {
-        return strength;
-    }
-
-    public int getAttackPower() {
-        return attackPower;
-    }
-
-    public int getCurrentAttackPower() {
-        return currentAttackPower;
-    }
-
-    // ===== SETTERS =====
-    public void setStrength(int value) {
-        this.strength = Math.max(1, value);
-        recalcStats();
-
-        // mantém current dentro do limite
-        currentAttackPower = Math.min(currentAttackPower, attackPower);
-    }
-
-    public void setCurrentAttackPower(int value) {
-        this.currentAttackPower = Math.max(0, Math.min(value, attackPower));
-    }
-
-    // ===== SISTEMA DE ATAQUE =====
-    public void useAttack(int cost) {
-        if (cost <= 0) return;
-        currentAttackPower = Math.max(0, currentAttackPower - cost);
-    }
-
-    public void restoreAttack(int amount) {
-        if (amount <= 0) return;
-        currentAttackPower = Math.min(attackPower, currentAttackPower + amount);
-    }
-
-    public double getAttackPercentage() {
-        return (double) currentAttackPower / attackPower;
-    }
-
-    // ===== BONUS =====
-    public int getStrengthBonus() {
-        return strength * 2;
-    }
-
-    @Override
-    public String toString() {
-        return "Str{" +
-                "STR=" + strength +
-                ", ATK=" + currentAttackPower + "/" + attackPower +
-                '}';
-    }
-}
-
-=== src/main/java/com/bernardo/dbi/status/Spi.java ===
-package com.bernardo.dbi.status;
-
-public class Spi {
-
-    private int spirit;
-
-    private int currentKi;
-    private int maxKi;
-
-    private double kiRegenRate;
-    private double skillPowerMultiplier;
-    private double kiCostReduction;
-
-    public Spi(int spirit) {
-        this.spirit = Math.max(1, spirit);
-        recalcStats();
-        this.currentKi = maxKi;
-    }
-
-    // ===== RECALC =====
-    private void recalcStats() {
-        // KI total
-        this.maxKi = spirit * 10;
-
-        // regeneração (máx 10%)
-        this.kiRegenRate = Math.min(0.02 + spirit * 0.001, 0.1);
-
-        // poder de habilidade (máx 3x)
-        this.skillPowerMultiplier = Math.min(1.0 + spirit * 0.03, 3.0);
-
-        // redução de custo (máx 50%)
-        this.kiCostReduction = Math.min(spirit * 0.002, 0.5);
-    }
-
-    // ===== GETTERS =====
-    public int getSpirit() {
-        return spirit;
-    }
-
-    public int getCurrentKi() {
-        return currentKi;
-    }
-
-    public int getMaxKi() {
-        return maxKi;
-    }
-
-    public double getKiRegenRate() {
-        return kiRegenRate;
-    }
-
-    public double getSkillPowerMultiplier() {
-        return skillPowerMultiplier;
-    }
-
-    public double getKiCostReduction() {
-        return kiCostReduction;
-    }
-
-    // ===== SET =====
-    public void setSpirit(int value) {
-        this.spirit = Math.max(1, value);
-        recalcStats();
-
-        currentKi = Math.min(currentKi, maxKi);
-    }
-
-    // ===== KI SYSTEM =====
-    public boolean hasKi(int cost) {
-        int finalCost = getReducedCost(cost);
-        return currentKi >= finalCost;
-    }
-
-    public void useKi(int cost) {
-        int finalCost = getReducedCost(cost);
-        currentKi = Math.max(0, currentKi - finalCost);
-    }
-
-    public void restoreKi(int amount) {
-        if (amount <= 0) return;
-        currentKi = Math.min(maxKi, currentKi + amount);
-    }
-
-    private int getReducedCost(int cost) {
-        return (int)(cost * (1 - kiCostReduction));
-    }
-
-    public double getKiPercentage() {
-        return (double) currentKi / maxKi;
-    }
-
-    // ===== REGEN =====
-    public void regenerateKi() {
-        int regen = (int)(maxKi * kiRegenRate);
-        restoreKi(regen);
-    }
-
-    // ===== TICK =====
-    public void tick() {
-        regenerateKi();
-    }
-
-    // ===== DEBUG =====
-    @Override
-    public String toString() {
-        return "Spi{" +
-                "SPI=" + spirit +
-                ", KI=" + currentKi + "/" + maxKi +
-                ", Regen=" + (int)(kiRegenRate * 100) + "%" +
-                ", Power=" + String.format("%.2f", skillPowerMultiplier) +
-                '}';
-    }
-}
-
-=== src/main/java/com/bernardo/dbi/status/Con.java ===
-package com.bernardo.dbi.status;
-
-public class Con {
-    private int constitution;
-    private int currentHealth;
-    private int maxHealth;
-    private int currentStamina;
-    private int maxStamina;
-
-    private double healthRegenRate;
-    private double staminaRegenRate;
-
-    public Con(int constitution) {
-        this.constitution = constitution;
-        this.maxHealth = constitution * 5;
-        this.currentHealth = maxHealth;
-        this.maxStamina = constitution * 5;
-        this.currentStamina = maxStamina;
-
-        this.healthRegenRate = 0.01;
-        this.staminaRegenRate = 0.03;
-    }
-
-    // ===== GETTERS =====
-    public int getConstitution() { return constitution; }
-    public int getCurrentHealth() { return currentHealth; }
-    public int getMaxHealth() { return maxHealth; }
-    public int getCurrentStamina() { return currentStamina; }
-    public int getMaxStamina() { return maxStamina; }
-
-    public double getHealthRegenRate() { return healthRegenRate; }
-    public double getStaminaRegenRate() { return staminaRegenRate; }
-
-    // ===== SET CONSTITUTION =====
-    public void setConstitution(int value) {
-        this.constitution = Math.max(1, value);
-
-        this.maxHealth = constitution * 5;
-        this.maxStamina = constitution * 5;
-
-        currentHealth = Math.min(currentHealth, maxHealth);
-        currentStamina = Math.min(currentStamina, maxStamina);
-    }
-
-    // ===== VIDA =====
-    public void heal(int amount) {
-        if (amount <= 0) return;
-        currentHealth = Math.min(maxHealth, currentHealth + amount);
-    }
-
-    public void takeDamage(int amount) {
-        if (amount <= 0) return;
-        currentHealth = Math.max(0, currentHealth - amount);
-    }
-
-    public double getHealthPercentage() {
-        return (double) currentHealth / maxHealth;
-    }
-
-    // ===== STAMINA =====
-    public void restoreStamina(int amount) {
-        if (amount <= 0) return;
-        currentStamina = Math.min(maxStamina, currentStamina + amount);
-    }
-
-    public void consumeStamina(int amount) {
-        if (amount <= 0) return;
-        currentStamina = Math.max(0, currentStamina - amount);
-    }
-
-    public double getStaminaPercentage() {
-        return (double) currentStamina / maxStamina;
-    }
-
-    // ===== REGEN =====
-    public void regenerateHealth() {
-        int regen = (int)(maxHealth * healthRegenRate);
-        heal(regen);
-    }
-
-    public void regenerateStamina() {
-        int regen = (int)(maxStamina * staminaRegenRate);
-        restoreStamina(regen);
-    }
-
-    public void tickRegeneration() {
-        regenerateHealth();
-        regenerateStamina();
-    }
-
-    // ===== BONUS =====
-    public int getLifeBonus() {
-        return constitution * 5;
-    }
-
-    public int getStaminaBonus() {
-        return constitution * 5;
-    }
-
-    public void boostRegenFromConstitution() {
-        double bonus = constitution * 0.001;
-        healthRegenRate = Math.min(healthRegenRate + bonus, 0.2);
-        staminaRegenRate = Math.min(staminaRegenRate + bonus, 0.3);
-    }
-
-    @Override
-    public String toString() {
-        return "Con{" +
-                "Con=" + constitution +
-                ", HP=" + currentHealth + "/" + maxHealth +
-                ", STM=" + currentStamina + "/" + maxStamina +
-                '}';
-    }
-}
-
-=== src/main/java/com/bernardo/dbi/status/Mnd.java ===
-package com.bernardo.dbi.status;
-
-public class Mnd {
-
-    private int mind;
-
-    private double kiEfficiency;
-    private double regenBoost;
-    private double controlBonus;
-
-    public Mnd(int mind) {
-        this.mind = Math.max(1, mind);
-        recalcStats();
-    }
-
-    // ===== RECALC =====
-    private void recalcStats() {
-        // eficiência (mais dano com menos KI)
-        this.kiEfficiency = Math.min(mind * 0.01, 0.7);
-
-        // boost de regen
-        this.regenBoost = Math.min(mind * 0.005, 0.5);
-
-        // controle (menos desperdício)
-        this.controlBonus = Math.min(mind * 0.003, 0.4);
-    }
-
-    // ===== GETTERS =====
-    public int getMind() { return mind; }
-    public double getKiEfficiency() { return kiEfficiency; }
-    public double getRegenBoost() { return regenBoost; }
-    public double getControlBonus() { return controlBonus; }
-
-    // ===== SET =====
-    public void setMind(int value) {
-        this.mind = Math.max(1, value);
-        recalcStats();
-    }
-
-    // ===== EFEITOS =====
-    public int reduceWaste(int cost) {
-        return (int)(cost * (1 - controlBonus));
-    }
-
-    public int boostRegen(int baseRegen) {
-        return (int)(baseRegen * (1 + regenBoost));
-    }
-
-    public double boostSkillPower(double basePower) {
-        return basePower * (1 + kiEfficiency);
-    }
-
-    @Override
-    public String toString() {
-        return "Mnd{" +
-                "MND=" + mind +
-                ", Eff=" + (int)(kiEfficiency * 100) + "%" +
-                ", Regen=" + (int)(regenBoost * 100) + "%" +
-                '}';
-    }
-}
-
-=== src/main/java/com/bernardo/dbi/status/Will.java ===
-package com.bernardo.dbi.status;
-
-public class Will {
-
-    private int willpower;
-
-    private double mentalResistance;
-    private double kiStability;
-    private double pressureResistance;
-
-    public Will(int willpower) {
-        this.willpower = Math.max(1, willpower);
-        recalcStats();
-    }
-
-    // ===== RECALC =====
-    private void recalcStats() {
-        // resistência mental (máx 80%)
-        this.mentalResistance = Math.min(willpower * 0.01, 0.8);
-
-        // estabilidade de KI (menos gasto em combate)
-        this.kiStability = Math.min(willpower * 0.005, 0.5);
-
-        // resistência sob pressão (low HP boost)
-        this.pressureResistance = Math.min(willpower * 0.003, 0.4);
-    }
-
-    // ===== GETTERS =====
-    public int getWillpower() { return willpower; }
-    public double getMentalResistance() { return mentalResistance; }
-    public double getKiStability() { return kiStability; }
-    public double getPressureResistance() { return pressureResistance; }
-
-    // ===== SET =====
-    public void setWillpower(int value) {
-        this.willpower = Math.max(1, value);
-        recalcStats();
-    }
-
-    // ===== EFEITOS =====
-    public boolean resistEffect(double chance) {
-        return Math.random() < mentalResistance * chance;
-    }
-
-    public int reduceKiCost(int cost) {
-        return (int)(cost * (1 - kiStability));
-    }
-
-    public int boostUnderPressure(int value, double hpPercent) {
-        if (hpPercent < 0.3) {
-            return (int)(value * (1 + pressureResistance));
-        }
-        return value;
-    }
-
-    @Override
-    public String toString() {
-        return "Will{" +
-                "WILL=" + willpower +
-                ", Resist=" + (int)(mentalResistance * 100) + "%" +
-                ", Stability=" + (int)(kiStability * 100) + "%" +
-                '}';
-    }
-}
-
-=== src/main/java/com/bernardo/dbi/status/Dex.java ===
-package com.bernardo.dbi.status;
-
-import java.util.Random;
-
-public class Dex {
-
-    private int dexterity;
-
-    private double dodgeChance;      // chance de esquiva
-    private double speedMultiplier;  // velocidade
-    private double damageReduction;  // redução de dano
-
-    private Random random;
-
-    public Dex(int dexterity) {
-        this.dexterity = Math.max(1, dexterity);
-        this.random = new Random();
-        recalcStats();
-    }
-
-    // ===== RECALC =====
-    private void recalcStats() {
-        // esquiva (máx 50%)
-        this.dodgeChance = Math.min(0.05 + dexterity * 0.005, 0.5);
-
-        // velocidade (máx 2x)
-        this.speedMultiplier = Math.min(1.0 + dexterity * 0.02, 2.0);
-
-        // redução de dano (máx 40%)
-        this.damageReduction = Math.min(dexterity * 0.003, 0.4);
-    }
-
-    // ===== GETTERS =====
-    public int getDexterity() {
-        return dexterity;
-    }
-
-    public double getDodgeChance() {
-        return dodgeChance;
-    }
-
-    public double getSpeedMultiplier() {
-        return speedMultiplier;
-    }
-
-    public double getDamageReduction() {
-        return damageReduction;
-    }
-
-    // ===== SET =====
-    public void setDexterity(int value) {
-        this.dexterity = Math.max(1, value);
-        recalcStats();
-    }
-
-    // ===== SISTEMA DE DEFESA =====
-    public boolean tryDodge() {
-        return random.nextDouble() < dodgeChance;
-    }
-
-    public int reduceDamage(int damage) {
-        if (damage <= 0) return 0;
-
-        int reduced = (int)(damage * (1 - damageReduction));
-        return Math.max(0, reduced);
-    }
-
-    // ===== DEBUG =====
-    @Override
-    public String toString() {
-        return "Dex{" +
-                "DEX=" + dexterity +
-                ", Dodge=" + (int)(dodgeChance * 100) + "%" +
-                ", Speed=" + String.format("%.2f", speedMultiplier) +
-                ", Def=" + (int)(damageReduction * 100) + "%" +
-                '}';
     }
 }
 
@@ -1489,63 +1072,6 @@ public class BlockPlus extends Block {
     }
 }
 
-=== src/main/java/com/bernardo/dbi/entity/EntityKiBlast.java ===
-package com.bernardo.dbi.entity;
-
-import com.bernardo.dbi.status.StatsManager;
-import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.entity.projectile.EntityThrowable;
-import net.minecraft.util.MovingObjectPosition;
-import net.minecraft.world.World;
-
-public class EntityKiBlast extends EntityThrowable {
-
-    private int damage = 10;
-    private StatsManager stats;
-
-    public EntityKiBlast(World world) {
-        super(world);
-    }
-
-    public EntityKiBlast(World world, EntityLivingBase shooter, StatsManager stats) {
-        super(world, shooter);
-        this.stats = stats;
-
-        // dano baseado no SPI
-        if (stats != null) {
-            this.damage = (int)(10 * stats.getSpi().getSkillPowerMultiplier());
-        }
-    }
-
-    @Override
-    protected void onImpact(MovingObjectPosition mop) {
-
-        if (!this.worldObj.isRemote) {
-
-            if (mop.entityHit != null && mop.entityHit instanceof EntityLivingBase) {
-                EntityLivingBase target = (EntityLivingBase) mop.entityHit;
-
-                target.attackEntityFrom(
-                    net.minecraft.util.DamageSource.magic,
-                    damage
-                );
-            }
-
-            this.setDead();
-        }
-    }
-
-    @Override
-    public void onUpdate() {
-        super.onUpdate();
-
-        // mata depois de um tempo (não ficar infinito)
-        if (this.ticksExisted > 40) {
-            this.setDead();
-        }
-    }
-}
-
 === src/main/java/com/bernardo/dbi/DragonBlockInfinity.java ===
 package com.bernardo.dbi;
 
@@ -1585,14 +1111,11 @@ package com.bernardo.dbi;
 import com.bernardo.dbi.client.KeyBindings;
 import com.bernardo.dbi.client.menu.MenuRouter;
 import com.bernardo.dbi.client.menu.screens.CharacterCreationScreen;
-import com.bernardo.dbi.client.render.aura.shader.AuraShader;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
-import net.minecraftforge.client.event.RegisterShadersEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
-import java.io.IOException;
 
 @Mod.EventBusSubscriber(modid = DragonBlockInfinity.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public class ClientSetup {
@@ -1606,11 +1129,6 @@ public class ClientSetup {
     @SubscribeEvent
     public static void onRegisterKeyMappings(RegisterKeyMappingsEvent event) {
         KeyBindings.register(event);
-    }
-
-    @SubscribeEvent
-    public static void onRegisterShaders(RegisterShadersEvent event) throws IOException {
-        AuraShader.onRegisterShaders(event);
     }
 }
 
@@ -1910,6 +1428,65 @@ public class AuraShader {
     }
 }
 
+=== src/main/java/com/bernardo/dbi/client/render/race/RaceLayerRenderer.java ===
+package com.bernardo.dbi.client.render.race;
+
+import com.bernardo.dbi.DragonBlockInfinity;
+import com.bernardo.dbi.core.PlayerPreview;
+import com.bernardo.dbi.core.race.PlayerRaceData;
+import com.bernardo.dbi.core.race.Race;
+import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.client.player.AbstractClientPlayer;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.entity.player.PlayerRenderer;
+import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.world.entity.player.Player;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.client.event.RenderPlayerEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
+
+@Mod.EventBusSubscriber(modid = DragonBlockInfinity.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
+public class RaceLayerRenderer {
+
+    @SubscribeEvent
+    public static void onRenderPlayerPre(RenderPlayerEvent.Pre event) {
+        Player player = event.getEntity();
+        if (!(player instanceof AbstractClientPlayer clientPlayer)) return;
+
+        // No menu usa previewRace, no mundo usa a raça salva
+        Race race = PlayerPreview.previewRace != null
+            ? PlayerPreview.previewRace
+            : PlayerRaceData.getRace(player.getUUID());
+
+        if (!race.hasTexture()) return;
+
+        event.setCanceled(true);
+
+        PoseStack poseStack = event.getPoseStack();
+        MultiBufferSource bufferSource = event.getMultiBufferSource();
+        int packedLight = event.getPackedLight();
+        float partialTick = event.getPartialTick();
+
+        PlayerRenderer renderer = event.getRenderer();
+        var model = renderer.getModel();
+
+        model.setupAnim(clientPlayer,
+            clientPlayer.walkAnimation.position(),
+            clientPlayer.walkAnimation.speed(),
+            clientPlayer.tickCount + partialTick,
+            clientPlayer.getYHeadRot() - clientPlayer.getYRot(),
+            clientPlayer.getXRot());
+
+        poseStack.pushPose();
+        var vertexConsumer = bufferSource.getBuffer(RenderType.entityTranslucent(race.getTexture()));
+        model.renderToBuffer(poseStack, vertexConsumer, packedLight,
+            OverlayTexture.NO_OVERLAY, 1f, 1f, 1f, 1f);
+        poseStack.popPose();
+    }
+}
+
 === src/main/java/com/bernardo/dbi/client/ClientEvents.java ===
 package com.bernardo.dbi.client;
 
@@ -2031,9 +1608,8 @@ public class CharacterCreationScreen extends DBIScreen {
         new ResourceLocation(DragonBlockInfinity.MOD_ID, "textures/gui/gui.png");
 
     private float yaw = 0f;
-    private float pitch = -10f;
     private boolean dragging = false;
-    private double lastMouseX, lastMouseY;
+    private double lastMouseX;
 
     public CharacterCreationScreen() {
         super(Component.translatable("screen.dragonblockinfinity.character_creation"));
@@ -2050,12 +1626,12 @@ public class CharacterCreationScreen extends DBIScreen {
             guiLeft, guiTop, guiWidth, guiHeight,
             0, 0, IMG_W, USEFUL_H, IMG_W, IMG_H);
 
-        // Player na metade esquerda, pés no fundo da área útil
         int previewX = guiLeft + guiWidth / 4;
         int previewY = guiTop  + guiHeight - scaled(10);
         int previewSize = guiHeight / 3;
 
-        PlayerPreview.render(graphics, previewX, previewY, previewSize, yaw, pitch);
+        // pitch fixo em 0 — só rotação horizontal
+        PlayerPreview.render(graphics, previewX, previewY, previewSize, yaw);
 
         super.render(graphics, mouseX, mouseY, partialTick);
     }
@@ -2064,7 +1640,6 @@ public class CharacterCreationScreen extends DBIScreen {
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         dragging = true;
         lastMouseX = mouseX;
-        lastMouseY = mouseY;
         return super.mouseClicked(mouseX, mouseY, button);
     }
 
@@ -2077,11 +1652,8 @@ public class CharacterCreationScreen extends DBIScreen {
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
         if (dragging) {
-            yaw   += (float)(mouseX - lastMouseX) * 1.5f;
-            pitch += (float)(mouseY - lastMouseY) * 1.0f;
-            pitch  = Math.max(-30f, Math.min(30f, pitch));
+            yaw += (float)(mouseX - lastMouseX) * 1.5f;
             lastMouseX = mouseX;
-            lastMouseY = mouseY;
         }
         return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
     }
@@ -2379,7 +1951,7 @@ public class KeyBindings {
 === src/main/resources/assets/dragonblockinfinity/models/block/block_namekdirt.json ===
 {"parent":"minecraft:block/cube_all","textures":{"all":"dragonblockinfinity:block/block_namekdirty"}}
 
-=== src/main/resources/assets/dragonblockinfinity/shaders/core/aura.json ===
+=== src/main/resources/assets/dragonblockinfinity/shaders/post/aura.json ===
 {
   "vertex": "dragonblockinfinity:aura",
   "fragment": "dragonblockinfinity:aura",
@@ -2401,6 +1973,25 @@ public class KeyBindings {
   ],
   "blend": {"func":"add","srcrgb":"srcalpha","dstrgb":"1-srcalpha"},
   "cull": false
+}
+
+=== src/main/resources/assets/dragonblockinfinity/shaders/post/ki_blast.json ===
+{
+  "targets": [
+    "swap"
+  ],
+  "passes": [
+    {
+      "name": "ki_blast",
+      "intarget": "minecraft:main",
+      "outtarget": "swap"
+    },
+    {
+      "name": "blit",
+      "intarget": "swap",
+      "outtarget": "minecraft:main"
+    }
+  ]
 }
 
 === src/main/resources/assets/dragonblockinfinity/blockstates/block_plus_light_gray.json ===
@@ -2833,6 +2424,98 @@ public class KeyBindings {
       }
     }
   }
+}
+
+=== Arquivos .vsh ===
+=== src/main/resources/assets/dragonblockinfinity/shaders/core/aura.vsh ===
+#version 110
+
+attribute vec3 Position;
+attribute vec4 Color;
+
+varying vec3 vNormalWorld;
+varying vec3 v_viewDir;
+varying float vHeight;
+
+uniform mat4 modelMatrix;
+uniform mat4 ProjMat;
+uniform float time;
+uniform float auravar;
+uniform float speed;
+uniform float amplitude;
+
+float triangleWave(float x) { return abs(fract(x) * 2.0 - 1.0); }
+
+void main() {
+    vec4 pos = vec4(Position, 1.0);
+    float angle = atan(Position.z, Position.x);
+    float freqY = 2.0;
+
+    float angularWave = triangleWave(angle * 2.0);
+    float layer = triangleWave((Position.y * freqY) - (time * speed));
+    float totalWave = layer * angularWave;
+    float falloff = smoothstep(-1.8, 0.0, Position.y) * (1.0 - smoothstep(0.0, 2.0, Position.y));
+    float smooth_auravar = auravar * auravar * (3.0 - 2.0 * auravar);
+
+    pos.xz *= smooth_auravar;
+    vec3 dir = normalize(pos.xyz);
+    vec3 upDir = vec3(0.0, 1.0, 0.0);
+    vec3 finalDir = normalize(mix(dir, upDir, 0.55));
+    pos.xyz += finalDir * (totalWave * amplitude * falloff) * pow(auravar, 6.0);
+
+    vec4 viewPos = modelMatrix * vec4(pos.xyz, 1.0);
+    vNormalWorld = normalize(pos.xyz);
+    v_viewDir = -viewPos.xyz;
+    vHeight = Position.y;
+    gl_Position = ProjMat * viewPos;
+}
+
+=== Arquivos .fsh ===
+=== src/main/resources/assets/dragonblockinfinity/shaders/core/ki_blast.fsh ===
+#version 110
+
+
+vec4 color;
+varying vec3 vNormalWorld;
+varying vec3 v_viewDir;
+varying float vHeight;
+uniform float time;
+void main() {
+    float intensity = pow(max(0.0, dot(normalize(vNormalWorld), normalize(v_viewDir))), 2.0);
+    float alpha = smoothstep(0.0, 1.0, intensity) * smoothstep(0.0, 1.0, vHeight) * (1.0 - smoothstep(1.0, 2.0, vHeight));
+    color = vec4(1.0, 0.5, 0.0, alpha);
+    gl_FragColor = color;
+    
+}
+=== src/main/resources/assets/dragonblockinfinity/shaders/core/aura.fsh ===
+#version 110
+
+varying vec3 vNormalWorld;
+varying vec3 v_viewDir;
+varying float vHeight;
+
+uniform vec3  color1;
+uniform vec3  color2;
+uniform float alp1;
+uniform float alp2;
+uniform float power;
+uniform float divis;
+uniform float heightFade;
+
+void main() {
+    vec3 N = normalize(vNormalWorld);
+    vec3 V = normalize(v_viewDir);
+    float facingRaw = dot(V, N);
+    if (facingRaw < 0.0) N = -N;
+    float facingAbs = abs(dot(V, N));
+    float edgeFactor = pow(1.0 - facingAbs, power) / divis;
+    float blend = clamp(edgeFactor, 0.0, 1.0);
+    float topFade = 1.0 - smoothstep(0.5, 1.0, vHeight * heightFade);
+    vec3 color = mix(color1, color2, blend);
+    float alpha = mix(alp1, alp2, blend);
+    if (facingRaw < 0.0) alpha = 0.01;
+    alpha *= topFade;
+    gl_FragColor = vec4(color, alpha);
 }
 
 === Caminhos dos arquivos .png ===
